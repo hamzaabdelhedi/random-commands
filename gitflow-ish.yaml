@@ -1,8 +1,8 @@
 stages:
   - build
-  - deploy-to-non-production
+  - update-manifests-non-production
   - promote-to-stable
-  - deploy-to-production
+  - update-manifests-production
 
 # Automatically Build and Push to Scratch Repository
 auto-push-scratch:
@@ -29,32 +29,30 @@ manual-push-staging:
     - develop
   when: manual
 
-# Deploy to Development Environment (Automatic)
-deploy-to-development:
-  stage: deploy-to-non-production
-  image: curlimages/curl:latest
-  script:
-    - echo "Deploying to development environment..."
-    - |
-      curl -X POST "https://deploy-to-environement/development/$CI_COMMIT_SHORT_SHA" \
-        -H "Content-Type: application/json"
-  only:
-    - develop
+# Include the external CI template with the update-manifests job
+include:
+  - project: 'your-org/ci-templates'
+    file: '/update-manifests.yml'
 
-# Deploy to Integration Environment (Manual)
-deploy-to-integration:
-  stage: deploy-to-non-production
-  image: curlimages/curl:latest
-  script:
-    - echo "Deploying to integration environment..."
-    - |
-      curl -X POST "https://deploy-to-environement/integration/$CI_COMMIT_SHORT_SHA" \
-        -H "Content-Type: application/json"
+# Update Manifests for Development Environment (Automatic)
+update-manifests-development:
+  extends: .update-manifests
+  variables:
+    ENVIRONMENT: "development"
   only:
-    - develop
-  when: manual
+    - develop  # Automatically on develop branch
+  when: always  # Runs automatically when commit happens on develop
 
-# Promote Image to Stable Repository (Merge Request Pipeline)
+# Update Manifests for Integration Environment (Manual)
+update-manifests-integration:
+  extends: .update-manifests
+  variables:
+    ENVIRONMENT: "integration"
+  only:
+    - develop  # Runs only on develop branch
+  when: manual  # Manual trigger for integration
+
+# Promote Image to Stable Repository (Merge Request Pipeline) - Manual
 promote-to-stable:
   stage: promote-to-stable
   image: curlimages/curl:latest
@@ -65,21 +63,18 @@ promote-to-stable:
         -H "Content-Type: application/json" \
         -d '{
           "source_repo": "scratch-repo",
-          "image_name": "poc",
-          "tag": "'$CI_COMMIT_SHORT_SHA'"
+          "image_name": "$IMAGE_NAME",
+          "tag": "$CI_COMMIT_SHORT_SHA"
         }'
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+  when: manual  # Manual trigger for promotion
 
-# Deploy to Production (Master Pipeline)
-deploy-to-production:
-  stage: deploy-to-production
-  image: curlimages/curl:latest
-  script:
-    - echo "Deploying to production environment..."
-    - |
-      curl -X POST "https://deploy-to-environement/production/$CI_COMMIT_SHORT_SHA" \
-        -H "Content-Type: application/json"
-  only:
-    - master
-  when: manual
+# Update Manifests for Production Environment (Merge Request to Master) - Manual
+update-manifests-production:
+  extends: .update-manifests
+  variables:
+    ENVIRONMENT: "production"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"  # Runs on merge requests to master
+  when: manual  # Manual trigger for production update

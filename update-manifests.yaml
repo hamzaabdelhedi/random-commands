@@ -1,0 +1,24 @@
+# This file contains the update-manifests-non-production job template
+
+stages:
+  - update-manifests-non-production
+
+# Update Manifests for Non-Production Environments (Development / Integration)
+.update-manifests-non-production:
+  image: debug-tools:latest  # Use the custom debug-tools image
+  script:
+    - echo "Updating manifests in fast-api-poc-manifests repository for $ENVIRONMENT environment..."
+    - git clone https://gitlab.com/your-org/fast-api-poc-manifests.git
+    - cd fast-api-poc-manifests
+    # Use | to continue the sed command inline for readability
+    - |
+      sed -i "s|image: $IMAGE_NAME:.*|image: $IMAGE_NAME:$CI_COMMIT_SHORT_SHA|" values-files/intranet-$ENVIRONMENT-values-file.yaml
+      sed -i "s|image: $IMAGE_NAME:.*|image: $IMAGE_NAME:$CI_COMMIT_SHORT_SHA|" manifests/intranet-$ENVIRONMENT/fast-api-intranet-$ENVIRONMENT.yaml
+    # Commit the changes to fast-api-poc-manifests
+    - git config --global user.email "ci@example.com"
+    - git config --global user.name "CI Bot"
+    - git commit -am "Update image tag to $IMAGE_NAME:$CI_COMMIT_SHORT_SHA for $ENVIRONMENT"
+    - git push
+  only:
+    - develop
+    - master

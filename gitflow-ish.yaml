@@ -1,0 +1,85 @@
+stages:
+  - build
+  - deploy-to-non-production
+  - promote-to-stable
+  - deploy-to-production
+
+# Automatically Build and Push to Scratch Repository
+auto-push-scratch:
+  stage: build
+  image: docker:latest
+  script:
+    - echo "Automatically building and pushing to scratch repository..."
+    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
+    - docker tag $IMAGE_NAME:$CI_COMMIT_SHORT_SHA scratch-repo/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA
+    - docker push scratch-repo/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA
+  only:
+    - develop
+
+# Manually Build and Push to Staging Repository
+manual-push-staging:
+  stage: build
+  image: docker:latest
+  script:
+    - echo "Manually building and pushing to staging repository..."
+    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
+    - docker tag $IMAGE_NAME:$CI_COMMIT_SHORT_SHA staging-repo/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA
+    - docker push staging-repo/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA
+  only:
+    - develop
+  when: manual
+
+# Deploy to Development Environment (Automatic)
+deploy-to-development:
+  stage: deploy-to-non-production
+  image: curlimages/curl:latest
+  script:
+    - echo "Deploying to development environment..."
+    - |
+      curl -X POST "https://deploy-to-environement/development/$CI_COMMIT_SHORT_SHA" \
+        -H "Content-Type: application/json"
+  only:
+    - develop
+
+# Deploy to Integration Environment (Manual)
+deploy-to-integration:
+  stage: deploy-to-non-production
+  image: curlimages/curl:latest
+  script:
+    - echo "Deploying to integration environment..."
+    - |
+      curl -X POST "https://deploy-to-environement/integration/$CI_COMMIT_SHORT_SHA" \
+        -H "Content-Type: application/json"
+  only:
+    - develop
+  when: manual
+
+# Promote Image to Stable Repository (Merge Request Pipeline)
+promote-to-stable:
+  stage: promote-to-stable
+  image: curlimages/curl:latest
+  script:
+    - echo "Promoting image to stable repository via API..."
+    - |
+      curl -X POST "$PROMOTION_API_URL" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "source_repo": "scratch-repo",
+          "image_name": "poc",
+          "tag": "'$CI_COMMIT_SHORT_SHA'"
+        }'
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+
+# Deploy to Production (Master Pipeline)
+deploy-to-production:
+  stage: deploy-to-production
+  image: curlimages/curl:latest
+  script:
+    - echo "Deploying to production environment..."
+    - |
+      curl -X POST "https://deploy-to-environement/production/$CI_COMMIT_SHORT_SHA" \
+        -H "Content-Type: application/json"
+  only:
+    - master
+  when: manual

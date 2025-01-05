@@ -39,6 +39,7 @@ update-manifests-development:
   extends: .update-manifests
   variables:
     ENVIRONMENT: "development"
+    ZONE: "intranet"
   only:
     - develop  # Automatically on develop branch
   when: always  # Runs automatically when commit happens on develop
@@ -48,6 +49,7 @@ update-manifests-integration:
   extends: .update-manifests
   variables:
     ENVIRONMENT: "integration"
+    ZONE: "intranet"
   only:
     - develop  # Runs only on develop branch
   when: manual  # Manual trigger for integration
@@ -75,6 +77,7 @@ update-manifests-production:
   extends: .update-manifests
   variables:
     ENVIRONMENT: "production"
+    ZONE: "intranet"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"  # Runs on merge requests to master
   when: manual  # Manual trigger for production update

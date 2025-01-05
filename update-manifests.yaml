@@ -1,23 +1,35 @@
-# This file contains the update-manifests-non-production job template
+# This file contains the update-manifests job template
 
 stages:
-  - update-manifests-non-production
+  - update-manifests
 
 # Update Manifests for Non-Production Environments (Development / Integration)
-.update-manifests-non-production:
+.update-manifests:
   image: debug-tools:latest  # Use the custom debug-tools image
   script:
-    - echo "Updating manifests in fast-api-poc-manifests repository for $ENVIRONMENT environment..."
+    - echo "Updating manifests in fast-api-poc-manifests repository for $ENVIRONMENT environment in $ZONE zone..."
     - git clone https://gitlab.com/your-org/fast-api-poc-manifests.git
     - cd fast-api-poc-manifests
-    # Use | to continue the sed command inline for readability
+    # Check if the values file exists for the given ZONE and ENVIRONMENT, and fail if not
     - |
-      sed -i "s|image: $IMAGE_NAME:.*|image: $IMAGE_NAME:$CI_COMMIT_SHORT_SHA|" values-files/intranet-$ENVIRONMENT-values-file.yaml
-      sed -i "s|image: $IMAGE_NAME:.*|image: $IMAGE_NAME:$CI_COMMIT_SHORT_SHA|" manifests/intranet-$ENVIRONMENT/fast-api-intranet-$ENVIRONMENT.yaml
+      if [ ! -f values-files/$ZONE-$ENVIRONMENT-values-file.yaml ]; then
+        echo "ERROR: The values file values-files/$ZONE-$ENVIRONMENT-values-file.yaml does not exist."
+        exit 1
+      fi
+    # Proceed with updating the image tags in the values file if it exists
+    - |
+      echo "Updating the image tag in values file..."
+      sed -i "s|image: $IMAGE_NAME:.*|image: $IMAGE_NAME:$CI_COMMIT_SHORT_SHA|" values-files/$ZONE-$ENVIRONMENT-values-file.yaml
+    # Proceed with updating the image tags in the manifest file if it exists
+    - |
+      if [ -f manifests/$ZONE-$ENVIRONMENT/fast-api-$ZONE-$ENVIRONMENT.yaml ]; then
+        echo "Updating the image tag in manifest file..."
+        sed -i "s|image: $IMAGE_NAME:.*|image: $IMAGE_NAME:$CI_COMMIT_SHORT_SHA|" manifests/$ZONE-$ENVIRONMENT/fast-api-$ZONE-$ENVIRONMENT.yaml
+      fi
     # Commit the changes to fast-api-poc-manifests
     - git config --global user.email "ci@example.com"
     - git config --global user.name "CI Bot"
-    - git commit -am "Update image tag to $IMAGE_NAME:$CI_COMMIT_SHORT_SHA for $ENVIRONMENT"
+    - git commit -am "Update image tag to $IMAGE_NAME:$CI_COMMIT_SHORT_SHA for $ENVIRONMENT in $ZONE"
     - git push
   only:
     - develop

@@ -7,7 +7,7 @@ stages:
 .update-manifests:
   image: debug-tools:latest  # Use the custom debug-tools image
   variables:
-    MANIFESTS_REPOSITORY: "https://gitlab.com/your-org/fast-api-poc-manifests.git"  # Define the repository URL here
+    MANIFESTS_REPOSITORY: "https://gitlab.com/your-org/fast-api-poc-manifests.git"  # Repository URL for manifests
   script:
     - echo "Updating manifests in repository $MANIFESTS_REPOSITORY for $ENVIRONMENT environment in $ZONE zone..."
     
@@ -21,23 +21,30 @@ stages:
         echo "ERROR: The values file values-files/$ZONE-$ENVIRONMENT-values-file.yaml does not exist."
         exit 1
       fi
-      
-    # Proceed with updating the image tags in the values file if it exists
+
+    # Check if the manifest file exists for the given ZONE and ENVIRONMENT (Optional)
     - |
-      echo "Updating the image tag in values file..."
-      sed -i "s|image: $IMAGE_NAME:.*|image: $IMAGE_NAME:$CI_COMMIT_SHORT_SHA|" values-files/$ZONE-$ENVIRONMENT-values-file.yaml
+      if [ ! -f manifests/$ZONE-$ENVIRONMENT/fast-api-$ZONE-$ENVIRONMENT.yaml ]; then
+        echo "WARNING: The manifest file manifests/$ZONE-$ENVIRONMENT/fast-api-$ZONE-$ENVIRONMENT.yaml does not exist. Skipping manifest update."
+      fi
     
-    # Proceed with updating the image tags in the manifest file if it exists
+    # Proceed with updating the image tag and repository in the values file
+    - |
+      echo "Updating the image repository and tag in values file..."
+      sed -i "s|repository:.*|repository: $ARTIFACTORY_DOCKER_REPOSITORY/$IMAGE_NAME|" values-files/$ZONE-$ENVIRONMENT-values-file.yaml
+      sed -i "s|tag:.*|tag: $CI_COMMIT_SHORT_SHA|" values-files/$ZONE-$ENVIRONMENT-values-file.yaml
+    
+    # Proceed with updating the image tag in the manifest file if it exists
     - |
       if [ -f manifests/$ZONE-$ENVIRONMENT/fast-api-$ZONE-$ENVIRONMENT.yaml ]; then
         echo "Updating the image tag in manifest file..."
-        sed -i "s|image: $IMAGE_NAME:.*|image: $IMAGE_NAME:$CI_COMMIT_SHORT_SHA|" manifests/$ZONE-$ENVIRONMENT/fast-api-$ZONE-$ENVIRONMENT.yaml
+        sed -i "s|image:.*|image: $ARTIFACTORY_DOCKER_REPOSITORY/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA|" manifests/$ZONE-$ENVIRONMENT/fast-api-$ZONE-$ENVIRONMENT.yaml
       fi
 
     # Commit the changes to the cloned repository
     - git config --global user.email "ci@example.com"
     - git config --global user.name "CI Bot"
-    - git commit -am "Update image tag to $IMAGE_NAME:$CI_COMMIT_SHORT_SHA for $ENVIRONMENT in $ZONE"
+    - git commit -am "Update image repository and tag to $ARTIFACTORY_DOCKER_REPOSITORY/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA for $ENVIRONMENT in $ZONE"
     - git push
   only:
     - develop

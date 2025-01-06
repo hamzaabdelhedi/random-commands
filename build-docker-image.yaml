@@ -1,0 +1,23 @@
+# GitLab CI configuration for building and pushing a Docker image to Artifactory
+
+stages:
+  - build_and_push
+
+.build_and_push_template:
+  image: docker:stable
+  variables:
+    ARTIFACTORY_DOCKER_REPOSITORY: "my_docker_repo"
+    ARTIFACTORY_SUFFIX: ".artifactory.com"
+    IMAGE_NAME_AND_TAG: "$ARTIFACTORY_DOCKER_REPOSITORY.$ARTIFACTORY_SUFFIX/$CI_PROJECT_NAME:$CI_COMMIT_SHA"  # Dynamic tag based on commit hash
+    DOCKERFILE_PATH: "Dockerfile"  # You can make this dynamic as needed
+  before_script:
+    - echo "Logging into Docker repository $ARTIFACTORY_DOCKER_REPOSITORY.$ARTIFACTORY_SUFFIX"
+    - docker login -u "$USR" -p "$PWD" $ARTIFACTORY_DOCKER_REPOSITORY.$ARTIFACTORY_SUFFIX
+  script:
+    - echo "Building Docker image $IMAGE_NAME_AND_TAG using Dockerfile at $DOCKERFILE_PATH"
+    - docker build -t "$IMAGE_NAME_AND_TAG" -f "$DOCKERFILE_PATH" . || { echo "Docker build failed"; exit 1; }
+    - echo "Pushing Docker image $IMAGE_NAME_AND_TAG"
+    - docker push "$IMAGE_NAME_AND_TAG" || { echo "Docker push failed"; exit 1; }
+  after_script:
+    - echo "Logging out from Docker repository $ARTIFACTORY_DOCKER_REPOSITORY.$ARTIFACTORY_SUFFIX"
+    - docker logout $ARTIFACTORY_DOCKER_REPOSITORY.$ARTIFACTORY_SUFFIX

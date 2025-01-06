@@ -1,38 +1,40 @@
 stages:
   - build
+  - build_and_push
   - update-manifests-non-production
   - promote-to-stable
   - update-manifests-production
 
-# Automatically Build and Push to Scratch Repository
-auto-push-scratch:
-  stage: build
-  image: docker:latest
-  script:
-    - echo "Automatically building and pushing to scratch repository..."
-    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
-    - docker tag $IMAGE_NAME:$CI_COMMIT_SHORT_SHA scratch-repo/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA
-    - docker push scratch-repo/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA
-  only:
-    - develop
-
-# Manually Build and Push to Staging Repository
-manual-push-staging:
-  stage: build
-  image: docker:latest
-  script:
-    - echo "Manually building and pushing to staging repository..."
-    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
-    - docker tag $IMAGE_NAME:$CI_COMMIT_SHORT_SHA staging-repo/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA
-    - docker push staging-repo/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA
-  only:
-    - develop
-  when: manual
-
-# Include the external CI template with the update-manifests job
+# Include the external CI template
 include:
   - project: 'your-org/ci-templates'
     file: '/update-manifests.yml'
+  - project: 'your-org/ci-templates'
+    file: '/build_and_push.yml'
+
+# Automatically Build and Push to Scratch Repository
+auto-push-scratch:
+  extends: .build_and_push_template  # Use the build_and_push_template
+  variables:
+    ARTIFACTORY_DOCKER_REPOSITORY: "scratch"  # Scratch repository
+    ARTIFACTORY_SUFFIX: ".artifactory.com"
+    IMAGE_NAME_AND_TAG: "$ARTIFACTORY_DOCKER_REPOSITORY.$ARTIFACTORY_SUFFIX/$CI_PROJECT_NAME:$CI_COMMIT_SHORT_SHA"
+    DOCKERFILE_PATH: "Dockerfile"
+  only:
+    - develop  # Automatically triggered for develop branch
+  when: always  # Always run when code is pushed to develop
+
+# Manually Build and Push to Staging Repository
+manual-push-staging:
+  extends: .build_and_push_template  # Use the build_and_push_template
+  variables:
+    ARTIFACTORY_DOCKER_REPOSITORY: "staging"  # Staging repository
+    ARTIFACTORY_SUFFIX: ".artifactory.com"
+    IMAGE_NAME_AND_TAG: "$ARTIFACTORY_DOCKER_REPOSITORY.$ARTIFACTORY_SUFFIX/$CI_PROJECT_NAME:$CI_COMMIT_SHORT_SHA"
+    DOCKERFILE_PATH: "Dockerfile"
+  only:
+    - develop  # Only run on develop branch
+  when: manual  # Manual trigger for staging push
 
 # Update Manifests for Development Environment (Automatic)
 update-manifests-development:
@@ -41,18 +43,18 @@ update-manifests-development:
     ENVIRONMENT: "development"
     ZONE: "intranet"
   only:
-    - develop  # Automatically on develop branch
+    - develop
   when: always  # Runs automatically when commit happens on develop
 
-# Update Manifests for Integration Environment (Manual)
+# Update Manifests for Integration Environment (Manual Push)
 update-manifests-integration:
   extends: .update-manifests
   variables:
     ENVIRONMENT: "integration"
     ZONE: "intranet"
   only:
-    - develop  # Runs only on develop branch
-  when: manual  # Manual trigger for integration
+    - develop
+  when: manual  # Manual trigger for integration update
 
 # Promote Image to Stable Repository (Merge Request Pipeline) - Manual
 promote-to-stable:
@@ -79,5 +81,5 @@ update-manifests-production:
     ENVIRONMENT: "production"
     ZONE: "intranet"
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"  # Runs on merge requests to master
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
   when: manual  # Manual trigger for production update

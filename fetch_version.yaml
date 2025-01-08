@@ -1,0 +1,21 @@
+determine_version:
+  image: alpine:latest
+  stage: determine_version
+  script:
+    # Check if pyproject.toml exists and extract version
+    - if [ -f pyproject.toml ]; then
+        export version=$(grep -Po '(?<=^version = ")[^"]*' pyproject.toml);
+      elif [ -f version.txt ]; then
+        export version=$(cat version.txt);
+      else
+        export version=$(git rev-parse --short HEAD);
+      fi
+    # Print the determined version
+    - echo "Determined version: $version"
+
+  # Set the version variable for subsequent stages
+  artifacts:
+    reports:
+      dotenv: .env
+  script:
+    - echo "version=$version" >> .env
